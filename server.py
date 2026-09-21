@@ -51,6 +51,7 @@ Your AI drives the ring by writing tiny files into ./state/ :
 Missing files are fine — the ring just idles.
 """
 import json
+import socket
 import time
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -60,7 +61,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def load_config():
-    cfg = {"name": "Assistant", "port": 8794, "orbs": [],
+    cfg = {"name": "Assistant", "port": 8794, "host": "0.0.0.0", "orbs": [],
            # Seconds before a non-idle ring state is treated as stale and
            # shown as idle. Only ever rescues a writer that died without
            # saying goodbye; see the note in /orb.
@@ -84,6 +85,16 @@ try:
     STATE_TIMEOUT = float(CONFIG.get("state_timeout_s", 600))
 except (TypeError, ValueError):
     STATE_TIMEOUT = 600.0
+
+
+def discover_local_ip():
+    """Best-effort LAN address for phone access on the same Wi‑Fi."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
 
 
 def media_root():
@@ -386,7 +397,10 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     (HERE / "state").mkdir(exist_ok=True)   # the ring's runtime files land here
     port = int(CONFIG.get("port", 8794))
+    host = str(CONFIG.get("host") or "0.0.0.0")
+    local_ip = discover_local_ip()
     print(f"barehands up: http://127.0.0.1:{port}/stage.html", flush=True)
-    print("  tracker (camera): open that URL in Chrome", flush=True)
+    print(f"phone on same Wi‑Fi: http://{local_ip}:{port}/stage.html", flush=True)
+    print("  tracker (camera): open one of those URLs in Chrome", flush=True)
     print("  render (overlay): same URL + ?role=render", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

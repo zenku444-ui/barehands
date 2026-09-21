@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.barehands.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.barehands.app'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir layout.buildDirectory.dir('generated/barehandsAssets')
+        }
+    }
+}
+
+tasks.register('copyBarehandsAssets', Sync) {
+    from rootProject.projectDir
+    into layout.buildDirectory.dir('generated/barehandsAssets')
+    exclude '**/*.py', '**/*.bat', '**/*.sh', '**/.git/**', '.android-sdk/**', '.gradle/**', 'app/**', 'build/**'
+    exclude 'build.gradle', 'settings.gradle', '*.bak', 'state/**'
+}
+
+tasks.named('preBuild') { dependsOn 'copyBarehandsAssets' }
