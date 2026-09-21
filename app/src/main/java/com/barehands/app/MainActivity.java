@@ -11,6 +11,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 public final class MainActivity extends Activity {
     private static final int CAMERA_REQUEST = 42;
     private LocalServer server;
@@ -30,9 +33,16 @@ public final class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setDatabaseEnabled(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                Toast.makeText(MainActivity.this, "Ultron could not load: " + description, Toast.LENGTH_LONG).show();
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -40,7 +50,13 @@ public final class MainActivity extends Activity {
             }
         });
         setContentView(webView);
-        webView.loadUrl("http://127.0.0.1:8794/stage.html");
+        new Thread(() -> {
+            if (server.awaitReady(5000)) {
+                runOnUiThread(() -> webView.loadUrl("http://127.0.0.1:8794/stage.html?mobile=1&delegate=cpu"));
+            } else {
+                runOnUiThread(() -> Toast.makeText(this, "Ultron could not start its local board.", Toast.LENGTH_LONG).show());
+            }
+        }, "ultron-load").start();
     }
 
     @Override

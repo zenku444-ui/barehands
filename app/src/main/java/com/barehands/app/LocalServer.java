@@ -16,6 +16,7 @@ import java.util.List;
 final class LocalServer {
     private final AssetManager assets;
     private volatile boolean running;
+    private volatile boolean ready;
     private ServerSocket socket;
     private Thread thread;
     private volatile String scene = "{\"cursors\":[],\"items\":[]}";
@@ -28,10 +29,19 @@ final class LocalServer {
             try {
                 socket = new ServerSocket(8794, 20);
                 running = true;
+                ready = true;
                 while (running) new Thread(() -> handle(accept()), "barehands-request").start();
             } catch (IOException ignored) { }
         }, "barehands-server");
         thread.start();
+    }
+
+    boolean awaitReady(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (!ready && System.currentTimeMillis() < deadline) {
+            try { Thread.sleep(20); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return false; }
+        }
+        return ready;
     }
 
     private Socket accept() {

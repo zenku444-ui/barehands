@@ -21,6 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>barehands</title>
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden;
@@ -241,6 +242,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           justify-content:center; color:#8ff0e4; text-align:center;
           font:16px "SF Mono",Menlo,monospace; z-index:1000; background:#000;
           flex-direction:column; gap:12px; }
+  body.mobile .card { width:min(84vw, 480px); padding:16px; }
+  body.mobile .card.ringcard { width:min(92vw, 440px); }
+  body.mobile .card.ringcard canvas { width:min(92vw, 440px); height:min(92vw, 440px); }
+  body.mobile .card.imgcard img { max-width:78vw; max-height:48vh; }
+  body.mobile #hint { bottom:8px; padding:0 16px; font-size:11px; line-height:1.35; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -300,6 +306,7 @@ import { HandLandmarker, FilesetResolver } from
 // the key — keying green ate the cursor on the first OBS test, 2026-08-07).
 // ?cam=<label substring> picks the tracking camera; C cycles cameras live.
 const Q = new URLSearchParams(location.search);
+if (Q.get("mobile") === "1") document.body.classList.add("mobile");
 // ?res=WxH — capture resolution (default 1920x1080, the tracking sweet
 // spot: MediaPipe downscales every frame to its model input anyway, so
 // higher res buys self-view sharpness, never accuracy — and costs fps
@@ -2056,13 +2063,15 @@ function physics(dt) {
 }
 
 async function boot() {
-  await pickInitialCam();
-  const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
-  landmarker = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath:
-      "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-      delegate: "GPU" },
+  try {
+    await pickInitialCam();
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    const useCpu = Q.get("delegate") === "cpu" || /Android|iPhone|iPad/i.test(navigator.userAgent);
+    landmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: { modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate: useCpu ? "CPU" : "GPU" },
     numHands: 2, runningMode: "VIDEO",
     // phantom-hand filter (a real-room catch: debug showed a hand with
     // none in frame — a busy background is full of hand-shaped clutter
@@ -2075,7 +2084,14 @@ async function boot() {
     // and re-acquisition eats the frames that felt like grab-lag):
     // KEEP-tracking eased to 0.5 so a latched hand rides through blur;
     // fresh DETECTION stays 0.7 — the busy-background ghost wall holds.
-    minHandPresenceConfidence: 0.5 });
+      minHandPresenceConfidence: 0.5 });
+  } catch (e) {
+    const bootScreen = document.getElementById("boot");
+    bootScreen.innerHTML = "ULTRON<br><span style=\"color:#ffb38a;font-size:13px\">hand tracker could not start</span>" +
+      `<span style=\"color:#a8d8cf;font-size:11px;max-width:300px;text-align:center\">${escT(e && e.message ? e.message : "Check camera permission and internet, then reload.")}</span>`;
+    console.error("Ultron hand tracker failed", e);
+    return;
+  }
   document.getElementById("boot").remove();
   await loadTree();
   spawnStage();
